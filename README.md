@@ -42,9 +42,9 @@ node examples/basic-usage.js validate
 
 ## Documentation
 
-- [Implementation Guide](docs/implementation-guide.md)
-- [Technical Report](docs/technical-report.md)
-- [Best Practices](docs/best-practices.md)
+- [Implementation Guide](docs/implementation_guide.md)
+- [Technical Report](docs/technical_report.md)
+- [Best Practices](docs/best_practices.md)
 
 ## Performance
 
