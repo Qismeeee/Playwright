@@ -1,0 +1,54 @@
+{
+    "browser": {
+      "type": "chromium",
+      "headless": false,
+      "slowMo": 100,
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "launchOptions": {
+        "devtools": false,
+        "timeout": 30000
+      }
+    },
+    "recording": {
+      "maxDuration": 300,
+      "captureScreenshots": true,
+      "captureVideo": false,
+      "outputDir": "./output",
+      "batchSize": 100,
+      "flushInterval": 5000
+    },
+    "jsonl": {
+      "includeMetadata": true,
+      "includeScreenshots": false,
+      "includeVideoTimestamps": false,
+      "compression": false,
+      "prettyPrint": false
+    },
+    "selectors": {
+      "strategy": "smart",
+      "priority": ["id", "data-testid", "class", "tag"],
+      "generateCustom": true,
+      "includeText": true
+    },
+    "validation": {
+      "strictMode": true,
+      "validateOnWrite": true,
+      "schemaValidation": true,
+      "duplicateDetection": true
+    },
+    "performance": {
+      "memoryThresholdMB": 512,
+      "maxFileSize": 100,
+      "enableMonitoring": true,
+      "gcInterval": 60000
+    },
+    "logging": {
+      "level": "info",
+      "file": "./logs/app.log",
+      "console": true,
+      "timestamp": true
+    }
+  }
