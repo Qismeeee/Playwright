@@ -176,7 +176,7 @@ class CLI {
     console.log(chalk.yellow('⚡ Command Mode\n'));
 
     if (!argv.url) {
-      console.error(chalk.red('❌ URL is required in command mode'));
+      console.error(chalk.red('URL is required in command mode'));
       console.log('Use --interactive flag for interactive mode');
       process.exit(1);
     }

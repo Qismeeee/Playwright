@@ -10,10 +10,10 @@ class SelectorGenerator {
     }
   
     /**
-     * Main entry point - generate selector cho element
-     * @param {ElementHandle} element - Playwright element handle
-     * @param {Page} page - Playwright page instance
-     * @returns {Object} - Generated selectors với priority
+     * Main entry point
+     * @param {ElementHandle} element 
+     * @param {Page} page 
+     * @returns {Object} 
      */
     async generateSelector(element, page) {
       try {
@@ -57,7 +57,7 @@ class SelectorGenerator {
     /**
      * Extract element information for selector generation
      * @param {ElementHandle} element 
-     * @returns {Object} Element properties
+     * @returns {Object} 
      */
     async getElementInfo(element) {
       return await element.evaluate((el) => {
@@ -83,11 +83,11 @@ class SelectorGenerator {
   
     /**
      * Generate selector theo specific strategy
-     * @param {string} strategy - Selector strategy
-     * @param {Object} elementInfo - Element properties
-     * @param {ElementHandle} element - Element handle
-     * @param {Page} page - Page instance
-     * @returns {string|null} Generated selector
+     * @param {string} strategy 
+     * @param {Object} elementInfo 
+     * @param {ElementHandle} element 
+     * @param {Page} page 
+     * @returns {string|null} 
      */
     async generateByStrategy(strategy, elementInfo, element, page) {
       switch (strategy) {

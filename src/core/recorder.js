@@ -290,7 +290,7 @@ class PlaywrightRecorder extends EventEmitter {
       console.error('Page error:', error);
     });
 
-    console.log('✅ Event listeners setup complete');
+    console.log('Event listeners setup complete');
   }
 
   async recordAction(actionData) {

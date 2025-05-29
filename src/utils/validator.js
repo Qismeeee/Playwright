@@ -54,8 +54,8 @@ class JSONLValidator {
 
   /**
    * Validate single action record
-   * @param {Object} record - Action record to validate
-   * @returns {Object} Validation result
+   * @param {Object} record 
+   * @returns {Object} 
    */
   validateRecord(record) {
     const result = {
@@ -220,8 +220,8 @@ class JSONLValidator {
 
   /**
    * Validate entire JSONL file
-   * @param {string} filePath - Path to JSONL file
-   * @returns {Object} Validation summary
+   * @param {string} filePath 
+   * @returns {Object} 
    */
   async validateFile(filePath) {
     const summary = {

@@ -44,9 +44,6 @@ class DataProcessor extends EventEmitter {
     }
   }
 
-  /**
-   * Setup auto-flush timer
-   */
   setupAutoFlush() {
     this.flushTimer = setInterval(() => {
       if (this.buffer.length > 0) {
@@ -93,7 +90,7 @@ class DataProcessor extends EventEmitter {
   /**
    * Transform raw action to JSONL format
    * @param {Object} rawAction 
-   * @returns {Object} Transformed record
+   * @returns {Object} 
    */
   async transformAction(rawAction) {
     const record = {
@@ -110,8 +107,6 @@ class DataProcessor extends EventEmitter {
     if (rawAction.value !== undefined && rawAction.value !== null) {
       record.value = rawAction.value;
     }
-
-    // Remove any undefined fields
     Object.keys(record).forEach(key => {
       if (record[key] === undefined) {
         delete record[key];
@@ -128,7 +123,6 @@ class DataProcessor extends EventEmitter {
    * @returns {Object} 
    */
   async generateMetadata(rawAction, processedRecord) {
-    // Return empty object to disable metadata
     return {};
   }
 
@@ -267,9 +261,6 @@ class DataProcessor extends EventEmitter {
     return [...this.buffer];
   }
 
-  /**
-   * Clear buffer without writing
-   */
   clearBuffer() {
     const cleared = this.buffer.length;
     this.buffer = [];
@@ -277,9 +268,6 @@ class DataProcessor extends EventEmitter {
     this.emit('bufferCleared', cleared);
   }
 
-  /**
-   * Cleanup resources
-   */
   async cleanup() {
     try {
       if (this.flushTimer) {
@@ -304,18 +292,12 @@ class DataProcessor extends EventEmitter {
     }
   }
 
-  /**
-   * Start processing (initialize streams, timers, etc.)
-   */
   async start() {
     console.log('🚀 Starting data processor...');
     this.stats.startTime = Date.now();
     this.emit('processorStarted');
   }
 
-  /**
-   * Stop processing gracefully
-   */
   async stop() {
     console.log('🛑 Stopping data processor...');
     await this.cleanup();
