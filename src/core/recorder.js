@@ -15,7 +15,7 @@ class PlaywrightRecorder extends EventEmitter {
       viewport: { width: 1280, height: 720 },
       recordVideo: false,
       recordScreenshots: true,
-      maxDuration: 300000, 
+      maxDuration: 300000,
       ...options
     };
 
@@ -24,16 +24,20 @@ class PlaywrightRecorder extends EventEmitter {
     this.page = null;
     this.selectorGenerator = new SelectorGenerator();
     this.dataProcessor = new DataProcessor(options.processor || {});
+
     this.sessionId = uuidv4();
     this.isRecording = false;
     this.startTime = null;
     this.recordingTimeout = null;
+
     this.lastActions = {
       click: { selector: null, timestamp: 0 },
       navigate: { url: null, timestamp: 0 },
       fill: { selector: null, value: null, timestamp: 0 }
     };
+
     this.inputDebounceMap = new Map();
+
     this.stats = {
       actionsRecorded: 0,
       errorsEncountered: 0,
@@ -46,7 +50,9 @@ class PlaywrightRecorder extends EventEmitter {
   async initialize() {
     try {
       console.log('🚀 Initializing browser...');
+      
       const browserEngine = this.getBrowserEngine();
+      
       this.browser = await browserEngine.launch({
         headless: this.options.headless,
         slowMo: this.options.slowMo,
@@ -74,8 +80,11 @@ class PlaywrightRecorder extends EventEmitter {
       });
 
       this.page = await this.context.newPage();
+
       await this.setupEventListeners();
+
       await this.dataProcessor.start();
+
       console.log('✅ Browser initialized successfully');
       this.emit('initialized');
 
@@ -102,6 +111,7 @@ class PlaywrightRecorder extends EventEmitter {
 
   async setupEventListeners() {
     console.log('📡 Setting up event listeners...');
+
     this.page.on('framenavigated', async (frame) => {
       if (frame === this.page.mainFrame()) {
         const currentUrl = frame.url();
@@ -122,18 +132,6 @@ class PlaywrightRecorder extends EventEmitter {
           generatedCode: `await page.goto('${currentUrl}');`
         });
       }
-    });
-
-    await this.page.addInitScript(() => {
-      document.addEventListener('click', (event) => {
-        window._playwrightRecorderClicks = window._playwrightRecorderClicks || [];
-        window._playwrightRecorderClicks.push({
-          target: event.target,
-          timestamp: Date.now(),
-          x: event.clientX,
-          y: event.clientY
-        });
-      });
     });
 
     await this.page.addInitScript(() => {
@@ -185,7 +183,8 @@ class PlaywrightRecorder extends EventEmitter {
               tagName: input.target.tagName,
               id: input.target.id,
               className: input.target.className,
-              type: input.target.type
+              type: input.target.type,
+              name: input.target.name
             }
           }));
         });
@@ -201,85 +200,6 @@ class PlaywrightRecorder extends EventEmitter {
       }
     }, 1000);
 
-    this.page.on('input', async (event) => {
-      try {
-        const element = event.target;
-        const value = await element.inputValue();
-        const selectorInfo = await this.selectorGenerator.generateSelector(element, this.page);
-
-        await this.recordAction({
-          action: 'fill',
-          selector: selectorInfo.primary,
-          value: value,
-          url: this.page.url(),
-          timestamp: new Date().toISOString(),
-          generatedCode: `await page.fill('${selectorInfo.primary}', '${value}');`,
-          elementInfo: await this.getElementInfo(element)
-        });
-      } catch (error) {
-        console.error('Error recording input event:', error);
-        this.stats.errorsEncountered++;
-      }
-    });
-
-    this.page.on('hover', async (event) => {
-      try {
-        const element = event.target;
-        const selectorInfo = await this.selectorGenerator.generateSelector(element, this.page);
-
-        await this.recordAction({
-          action: 'hover',
-          selector: selectorInfo.primary,
-          url: this.page.url(),
-          timestamp: new Date().toISOString(),
-          generatedCode: `await page.hover('${selectorInfo.primary}');`,
-          elementInfo: await this.getElementInfo(element)
-        });
-      } catch (error) {
-        console.error('Error recording hover event:', error);
-        this.stats.errorsEncountered++;
-      }
-    });
-
-    this.page.on('keydown', async (event) => {
-      const specialKeys = ['Enter', 'Tab', 'Escape', 'F1', 'F2', 'F3', 'F4', 'F5'];
-      
-      if (specialKeys.includes(event.key)) {
-        await this.recordAction({
-          action: 'press',
-          value: event.key,
-          url: this.page.url(),
-          timestamp: new Date().toISOString(),
-          generatedCode: `await page.keyboard.press('${event.key}');`
-        });
-      }
-    });
-
-    this.page.on('change', async (event) => {
-      try {
-        const element = event.target;
-        const tagName = await element.tagName();
-        
-        if (tagName.toLowerCase() === 'select') {
-          const value = await element.inputValue();
-          const selectorInfo = await this.selectorGenerator.generateSelector(element, this.page);
-
-          await this.recordAction({
-            action: 'select',
-            selector: selectorInfo.primary,
-            value: value,
-            url: this.page.url(),
-            timestamp: new Date().toISOString(),
-            generatedCode: `await page.selectOption('${selectorInfo.primary}', '${value}');`,
-            elementInfo: await this.getElementInfo(element)
-          });
-        }
-      } catch (error) {
-        console.error('Error recording select event:', error);
-        this.stats.errorsEncountered++;
-      }
-    });
-
     this.page.on('console', (msg) => {
       if (msg.type() === 'error') {
         console.error('Page console error:', msg.text());
@@ -290,64 +210,54 @@ class PlaywrightRecorder extends EventEmitter {
       console.error('Page error:', error);
     });
 
-    console.log('Event listeners setup complete');
+    console.log('✅ Event listeners setup complete');
   }
 
-  async recordAction(actionData) {
-    if (!this.isRecording) return;
-
-    try {
-      const enrichedAction = {
-        ...actionData,
-        sessionId: this.sessionId,
-        viewport: this.options.viewport
-      };
-
-      if (actionData.action !== 'navigate') {
-        try {
-          const userAgent = await this.page.evaluate(() => navigator.userAgent).catch(() => 'unknown');
-          const title = await this.page.title().catch(() => 'unknown');
-          const currentUrl = this.page && !this.page.isClosed() ? this.page.url() : 'unknown';
-          
-          enrichedAction.browserInfo = {
-            userAgent: userAgent,
-            url: currentUrl,
-            title: title
-          };
-        } catch (error) {
-          enrichedAction.browserInfo = {
-            userAgent: 'context-destroyed',
-            url: 'unknown',
-            title: 'unknown'
-          };
-        }
-      }
-
-      if (this.options.recordScreenshots && actionData.action !== 'navigate') {
-        try {
-          enrichedAction.screenshot = await this.captureScreenshot();
-        } catch (error) {
-        }
-      }
-
-      await this.dataProcessor.processAction(enrichedAction);
-      
-      this.stats.actionsRecorded++;
-      this.emit('actionRecorded', enrichedAction);
-
-      console.log(`📝 Recorded: ${actionData.action} ${actionData.selector || actionData.url}`);
-
-    } catch (error) {
-      console.error('Failed to record action:', error);
-      this.stats.errorsEncountered++;
-      this.emit('recordingError', error, actionData);
-    }
-  }
   async processClickEvent(clickData) {
     try {
       const elementData = await this.page.evaluate(({x, y}) => {
         const element = document.elementFromPoint(x, y);
         if (!element) return null;
+        
+        const getElementXPath = (el) => {
+          if (el.id) return `//*[@id="${el.id}"]`;
+          if (el === document.body) return '/html/body';
+          
+          let ix = 0;
+          const siblings = el.parentNode?.childNodes || [];
+          for (let i = 0; i < siblings.length; i++) {
+            const sibling = siblings[i];
+            if (sibling === el) {
+              const tagName = el.tagName.toLowerCase();
+              const parentXPath = getElementXPath(el.parentNode);
+              return `${parentXPath}/${tagName}[${ix + 1}]`;
+            }
+            if (sibling.nodeType === 1 && sibling.tagName === el.tagName) {
+              ix++;
+            }
+          }
+          return null;
+        };
+
+        const getTextBasedXPath = (el) => {
+          const text = el.textContent?.trim();
+          if (text && text.length > 0 && text.length < 50) {
+            const tagName = el.tagName.toLowerCase();
+            return `//${tagName}[text()="${text}"]`;
+          }
+          return null;
+        };
+
+        const getAttributeXPath = (el) => {
+          if (el.getAttribute('name')) {
+            return `//*[@name="${el.getAttribute('name')}"]`;
+          }
+          if (el.getAttribute('type')) {
+            const tagName = el.tagName.toLowerCase();
+            return `//${tagName}[@type="${el.getAttribute('type')}"]`;
+          }
+          return null;
+        };
         
         return {
           tagName: element.tagName.toLowerCase(),
@@ -357,19 +267,41 @@ class PlaywrightRecorder extends EventEmitter {
           attributes: Array.from(element.attributes).reduce((acc, attr) => {
             acc[attr.name] = attr.value;
             return acc;
-          }, {})
+          }, {}),
+          xpath: {
+            position: getElementXPath(element),
+            text: getTextBasedXPath(element),
+            attribute: getAttributeXPath(element)
+          },
+          offsetParent: element.offsetParent ? element.offsetParent.tagName : null
         };
       }, {x: clickData.x, y: clickData.y});
 
       if (!elementData) return;
-      const selector = this.generateSelectorFromData(elementData);
+
+      console.log('Element data for selector generation:', elementData);
+
+      const selectors = this.generateAllSelectors(elementData);
+      
+      console.log('Generated selectors:', selectors);
+
+      const currentTime = Date.now();
+      
+      if (selectors.primary === this.lastActions.click.selector && 
+          (currentTime - this.lastActions.click.timestamp) < 1000) {
+        return;
+      }
+      
+      this.lastActions.click.selector = selectors.primary;
+      this.lastActions.click.timestamp = currentTime;
       
       await this.recordAction({
         action: 'click',
-        selector: selector,
+        selector: selectors.primary,
+        selector_alternatives: selectors.alternatives,
         url: this.page.url(),
         timestamp: new Date(clickData.timestamp).toISOString(),
-        generatedCode: `await page.click('${selector}');`,
+        generatedCode: `await page.click('${selectors.primary}');`,
         elementInfo: {
           position: { x: clickData.x, y: clickData.y },
           ...elementData
@@ -384,17 +316,33 @@ class PlaywrightRecorder extends EventEmitter {
 
   async processInputEvent(inputData) {
     try {
-      const selector = this.generateSelectorFromData(inputData.target);
-      const inputKey = `${selector}_${inputData.value}`;
+      const elementData = {
+        tagName: inputData.target.tagName?.toLowerCase() || 'input',
+        id: inputData.target.id || null,
+        className: inputData.target.className || null,
+        attributes: {
+          name: inputData.target.name,
+          type: inputData.target.type
+        },
+        text: null,
+        xpath: {
+          attribute: inputData.target.name ? `//*[@name="${inputData.target.name}"]` : null,
+          position: null,
+          text: null
+        }
+      };
 
-      if (this.inputDebounceMap.has(selector)) {
-        clearTimeout(this.inputDebounceMap.get(selector));
+      const selectors = this.generateAllSelectors(elementData);
+      const inputKey = `${selectors.primary}_${inputData.value}`;
+
+      if (this.inputDebounceMap.has(selectors.primary)) {
+        clearTimeout(this.inputDebounceMap.get(selectors.primary));
       }
 
-      this.inputDebounceMap.set(selector, setTimeout(async () => {
+      this.inputDebounceMap.set(selectors.primary, setTimeout(async () => {
         const currentTime = Date.now();
         
-        if (selector === this.lastActions.fill.selector && 
+        if (selectors.primary === this.lastActions.fill.selector && 
             inputData.value === this.lastActions.fill.value &&
             (currentTime - this.lastActions.fill.timestamp) < 2000) {
           return;
@@ -402,21 +350,22 @@ class PlaywrightRecorder extends EventEmitter {
 
         if (inputData.value.length < 2) return;
         
-        this.lastActions.fill.selector = selector;
+        this.lastActions.fill.selector = selectors.primary;
         this.lastActions.fill.value = inputData.value;
         this.lastActions.fill.timestamp = currentTime;
         
         await this.recordAction({
           action: 'fill',
-          selector: selector,
+          selector: selectors.primary,
+          selector_alternatives: selectors.alternatives,
           value: inputData.value,
           url: this.page.url(),
           timestamp: new Date(inputData.timestamp).toISOString(),
-          generatedCode: `await page.fill('${selector}', '${inputData.value}');`,
+          generatedCode: `await page.fill('${selectors.primary}', '${inputData.value}');`,
           elementInfo: inputData.target
         });
 
-        this.inputDebounceMap.delete(selector);
+        this.inputDebounceMap.delete(selectors.primary);
       }, 1500));
 
     } catch (error) {
@@ -426,45 +375,211 @@ class PlaywrightRecorder extends EventEmitter {
     }
   }
 
-  generateSelectorFromData(elementData) {
+  generateAllSelectors(elementData) {
+    const selectors = [];
+    
     if (elementData.id) {
-      return `#${elementData.id}`;
+      selectors.push({
+        type: 'css_id',
+        value: `#${elementData.id}`,
+        priority: 1,
+        reliability: 0.95
+      });
+      selectors.push({
+        type: 'xpath_id',
+        value: `//*[@id="${elementData.id}"]`,
+        priority: 1,
+        reliability: 0.95
+      });
     }
     
     if (elementData.attributes && elementData.attributes['data-testid']) {
-      return `[data-testid="${elementData.attributes['data-testid']}"]`;
+      const testId = elementData.attributes['data-testid'];
+      selectors.push({
+        type: 'css_testid',
+        value: `[data-testid="${testId}"]`,
+        priority: 2,
+        reliability: 0.9
+      });
+      selectors.push({
+        type: 'xpath_testid',
+        value: `//*[@data-testid="${testId}"]`,
+        priority: 2,
+        reliability: 0.9
+      });
+    }
+
+    if (elementData.attributes && elementData.attributes['name']) {
+      const name = elementData.attributes['name'];
+      selectors.push({
+        type: 'css_name',
+        value: `[name="${name}"]`,
+        priority: 3,
+        reliability: 0.85
+      });
+      selectors.push({
+        type: 'xpath_name',
+        value: `//*[@name="${name}"]`,
+        priority: 3,
+        reliability: 0.85
+      });
+    }
+
+    if (elementData.attributes && elementData.attributes['type']) {
+      const type = elementData.attributes['type'];
+      selectors.push({
+        type: 'css_type',
+        value: `${elementData.tagName}[type="${type}"]`,
+        priority: 4,
+        reliability: 0.8
+      });
+      selectors.push({
+        type: 'xpath_type',
+        value: `//${elementData.tagName}[@type="${type}"]`,
+        priority: 4,
+        reliability: 0.8
+      });
+    }
+
+    if (elementData.text && elementData.text.length > 0 && elementData.text.length < 30) {
+      const text = elementData.text.replace(/"/g, '\\"');
+      selectors.push({
+        type: 'xpath_text',
+        value: `//${elementData.tagName}[text()="${text}"]`,
+        priority: 5,
+        reliability: 0.75
+      });
+      selectors.push({
+        type: 'xpath_contains_text',
+        value: `//${elementData.tagName}[contains(text(),"${text}")]`,
+        priority: 6,
+        reliability: 0.7
+      });
     }
     
     if (elementData.className) {
-      const firstClass = elementData.className.split(' ')[0];
-      return `${elementData.tagName}.${firstClass}`;
+      const classes = elementData.className.split(' ').filter(cls => 
+        cls.length > 2 && !cls.match(/^[a-z]+-[0-9]+$/) && !cls.match(/^css-[a-z0-9]+$/i)
+      );
+      if (classes.length > 0) {
+        const firstClass = classes[0];
+        selectors.push({
+          type: 'css_class',
+          value: `${elementData.tagName}.${firstClass}`,
+          priority: 7,
+          reliability: 0.6
+        });
+        selectors.push({
+          type: 'xpath_class',
+          value: `//${elementData.tagName}[@class="${firstClass}"]`,
+          priority: 7,
+          reliability: 0.6
+        });
+      }
     }
-    
-    return elementData.tagName || 'unknown';
+
+    if (elementData.xpath) {
+      if (elementData.xpath.attribute) {
+        selectors.push({
+          type: 'xpath_attribute',
+          value: elementData.xpath.attribute,
+          priority: 8,
+          reliability: 0.75
+        });
+      }
+      
+      if (elementData.xpath.text) {
+        selectors.push({
+          type: 'xpath_text_exact',
+          value: elementData.xpath.text,
+          priority: 5,
+          reliability: 0.75
+        });
+      }
+      
+      if (elementData.xpath.position) {
+        selectors.push({
+          type: 'xpath_position',
+          value: elementData.xpath.position,
+          priority: 10,
+          reliability: 0.4
+        });
+      }
+    }
+
+    selectors.push({
+      type: 'css_tag',
+      value: elementData.tagName,
+      priority: 11,
+      reliability: 0.3
+    });
+
+    selectors.sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      return b.reliability - a.reliability;
+    });
+
+    return {
+      primary: selectors[0]?.value || elementData.tagName,
+      alternatives: selectors.slice(1, 6).map(s => ({
+        selector: s.value,
+        type: s.type,
+        reliability: s.reliability
+      }))
+    };
   }
-  async getElementInfo(element) {
+
+  async recordAction(actionData) {
+    if (!this.isRecording) return;
+
     try {
-      return await element.evaluate((el) => ({
-        tagName: el.tagName.toLowerCase(),
-        id: el.id || null,
-        className: el.className || null,
-        text: el.textContent?.trim()?.substring(0, 100) || null,
-        attributes: Array.from(el.attributes).reduce((acc, attr) => {
-          acc[attr.name] = attr.value;
-          return acc;
-        }, {}),
-        position: {
-          x: Math.round(el.getBoundingClientRect().x),
-          y: Math.round(el.getBoundingClientRect().y),
-          width: Math.round(el.getBoundingClientRect().width),
-          height: Math.round(el.getBoundingClientRect().height)
-        },
-        visible: el.offsetParent !== null,
-        focused: el === document.activeElement
-      }));
+      console.log('Recording action with data:', actionData);
+
+      const enrichedAction = {
+        ...actionData,
+        session_id: this.sessionId,
+        viewport: this.options.viewport
+      };
+
+      if (actionData.action !== 'navigate') {
+        try {
+          const userAgent = await this.page.evaluate(() => navigator.userAgent).catch(() => 'unknown');
+          const title = await this.page.title().catch(() => 'unknown');
+          
+          enrichedAction.browserInfo = {
+            userAgent: userAgent,
+            url: this.page.url(),
+            title: title
+          };
+        } catch (error) {
+          enrichedAction.browserInfo = {
+            userAgent: 'context-destroyed',
+            url: this.page.url(),
+            title: 'unknown'
+          };
+        }
+      }
+
+      if (this.options.recordScreenshots && actionData.action !== 'navigate') {
+        try {
+          enrichedAction.screenshot = await this.captureScreenshot();
+        } catch (error) {
+        }
+      }
+
+      console.log('Enriched action before processor:', enrichedAction);
+
+      await this.dataProcessor.processAction(enrichedAction);
+      
+      this.stats.actionsRecorded++;
+      this.emit('actionRecorded', enrichedAction);
+
+      console.log(`📝 Recorded: ${actionData.action} ${actionData.selector || actionData.url}`);
+
     } catch (error) {
-      console.error('Error getting element info:', error);
-      return { error: error.message };
+      console.error('Failed to record action:', error);
+      this.stats.errorsEncountered++;
+      this.emit('recordingError', error, actionData);
     }
   }
 
@@ -488,12 +603,15 @@ class PlaywrightRecorder extends EventEmitter {
 
     try {
       console.log('🎬 Starting recording session...');
+      
       this.isRecording = true;
       this.startTime = Date.now();
+
       if (url) {
         console.log(`🌐 Navigating to: ${url}`);
         await this.page.goto(url, { waitUntil: 'networkidle' });
       }
+
       if (this.options.maxDuration > 0) {
         this.recordingTimeout = setTimeout(() => {
           console.log('⏰ Recording timeout reached, stopping...');
@@ -521,12 +639,16 @@ class PlaywrightRecorder extends EventEmitter {
       console.log('🛑 Stopping recording session...');
       
       this.isRecording = false;
+      
       if (this.recordingTimeout) {
         clearTimeout(this.recordingTimeout);
         this.recordingTimeout = null;
       }
+
       this.stats.sessionDuration = Date.now() - this.startTime;
+
       await this.dataProcessor.stop();
+
       const summary = this.generateSessionSummary();
       
       this.emit('recordingStopped', summary);
@@ -539,6 +661,7 @@ class PlaywrightRecorder extends EventEmitter {
       throw error;
     }
   }
+
   generateSessionSummary() {
     return {
       sessionId: this.sessionId,
@@ -562,6 +685,7 @@ class PlaywrightRecorder extends EventEmitter {
   isCurrentlyRecording() {
     return this.isRecording;
   }
+
   getStats() {
     return {
       ...this.stats,
@@ -574,6 +698,7 @@ class PlaywrightRecorder extends EventEmitter {
   async cleanup() {
     try {
       console.log('🧹 Cleaning up recorder resources...');
+
       if (this.isRecording) {
         await this.stopRecording();
       }
